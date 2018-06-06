@@ -1,8 +1,8 @@
 library (data.table)
 library(tcltk2)
+library(rModflow)
 
-source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ResuableFunctions/tclFuncs.R")
-source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ResuableFunctions/modflowDataFuncs.R")
+source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ReusableFunctions/tclFuncs.R")
 
 #=================================================================
 # Beginning of Script

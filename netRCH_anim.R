@@ -9,13 +9,13 @@ library(maps)
 library(maptools)
 library(animation)
 library(rgeos)
+library(rModflow)
 options(warn=-1)
 options(scipen = 999)
 
-source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ResuableFunctions/rasterFuncs.R")
-source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ResuableFunctions/gisFuncs.R")
-source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ResuableFunctions/tclFuncs.R")
-source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ResuableFunctions/modflowDataFuncs.R")
+source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ReusableFunctions/rasterFuncs.R")
+source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ReusableFunctions/gisFuncs.R")
+source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ReusableFunctions/tclFuncs.R")
 
 
 
@@ -195,7 +195,7 @@ if (printAnnualOn) {
 
 ani.options(convert = 'h:\\magick.exe')
 #ani.options(ffmpeg  = 'h:\\ffmpeg.exe')
-ani.options(ffmpeg  = '//ad.sfwmd.gov/dfsroot/data/wsd/sup/devel/source/ResuableFunctions/ffmpeg.exe')
+ani.options(ffmpeg  = '//ad.sfwmd.gov/dfsroot/data/wsd/sup/devel/source/ReusableFunctions/ffmpeg.exe')
 #ani.options(ffmpeg = 'C:/Program Files/ImageMagick-7.0.7-Q16/ffmpeg.exe')
 
 #============================================================

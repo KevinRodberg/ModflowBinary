@@ -1,4 +1,5 @@
 library (data.table)
+library(rModflow)
 #===============================================
 # Function to exit a little more nicely
 #===============================================
@@ -34,124 +35,7 @@ readRange <- function(){
   rng <- unique(sort(rng))
   return(rng)
 }
-#===============================================
-# Read just the Header record from a Cell by Cell file
-#===============================================
-readCBCHeader <- function(filPtr) {
-  while (length(record <- readBin(filPtr, raw(), 36)) > 0)
-  {
-    ints <- readBin(record, integer(), 9)
-    txt <- intToUtf8(record[8L + seq(16)])
-    KSTP <- ints[1]
-    KPER <- ints[2]
-    NC <- ints[7]
-    NR <- ints[8]
-    K <- ints[9]
-    header <- list(
-      KSTP = KSTP,
-      KPER = KPER,
-      TEXT = txt,
-      NC = NC,
-      NR = NR,
-      K = K
-    )
-    return(header)
-  }
-  return(list())
-}
-#===============================================
-#  Create list of Budget Term Headers available in 
-# Modflow Cell by Cell binary file
-#===============================================
-listBinHeaders <- function(filPtr) {
-  #  CBCterms <- vector("list", 100)
-  CBCterms <- list()
-  firstHeader <- readCBCHeader(filPtr)
-  kntFloats <- firstHeader$K * firstHeader$NR * firstHeader$NC
-  cbcBlock <- readBin(filPtr, double(), n = kntFloats, size = 4)
-  iknt <- 1
-  CBCterms[[iknt]] <- firstHeader$TEXT
-  repeat {
-    iknt <- iknt + 1
-    thisHeader <- readCBCHeader(filPtr)
-    # Don't read past EOF
-    if (length(thisHeader) > 0) {
-      if (thisHeader$TEXT == firstHeader$TEXT) {
-        cbcBlock <- readBin(filPtr, double(), n = kntFloats, size = 4)
-        break
-      } else {
-        CBCterms[[iknt]] <- thisHeader$TEXT
-        cbcBlock <-
-          readBin(filPtr, double(), n = kntFloats, size = 4)
-      }
-    }
-    # Prevent Runaway
-    if (iknt > 20) {
-      break
-    }
-  }
-  CBCTermSet <-
-    list(firstHeader$TEXT,
-         firstHeader$K,
-         firstHeader$NR,
-         firstHeader$NC,
-         CBCterms)
-  
-  return(CBCTermSet)
-}
 
-#===============================================
-# Function search for a defined budget term
-# and returns a vector of values 
-# by Stress Periods idenified in range of values
-#===============================================
-readCBCbinByTerm <- function(filPtr, term, SP_rng) {
-  bigVector <- vector('numeric')
-  HeaderRead <- readCBCHeader(filPtr)
-  kntFloats <- HeaderRead$K * HeaderRead$NR * HeaderRead$NC
-  cbcBlock <- readBin(filPtr, double(), n = kntFloats, size = 4)
-  i <- 1
-  cat(paste("0%.."))
-  if (HeaderRead$TEXT == term  &&
-      is.element(HeaderRead$KPER, SP_rng &&
-                 thisHeader$KPER <= max(SP_rng))) {
-#    print ("found on first try")
-    bigVector <- c(bigVector , cbcBlock)
-    i <- i + 1
-  } else{
-    repeat {
-      thisHeader <- readCBCHeader(filPtr)
-      # Don't read past EOF
-      if (length(thisHeader) > 0) {
-        if (thisHeader$TEXT == term  &&
-            is.element(thisHeader$KPER, SP_rng) &&
-            thisHeader$KPER <= max(SP_rng)) {
-          i <- i + 1
-#          print(paste(thisHeader$TEXT, thisHeader$KSTP, thisHeader$KPER))
-          cbcBlock <-
-            readBin(filPtr, double(), n = kntFloats, size = 4)
-          bigVector <- c(bigVector, cbcBlock)
-        } else {
-          cbcBlock <- readBin(filPtr, double(), n = kntFloats, size = 4)
-        }
-      }
-      # don't read everything unless necessary
-      if (length(thisHeader) == 0) {
-        cat('\n')
-        break
-      }
-      
-      if ( thisHeader$KPER > max(SP_rng)) {
-        cat('\n')
-        break
-      }
-      cat(paste('\r',format(as.numeric(thisHeader$KPER)/max(SP_rng)*100,digits=2,nsmall=2),"%"))
-      
-    }
-  }
-  
-  return(bigVector)
-}
 #===============================================
 # Define Modflow Cell by Cell Budget Term file
 #===============================================
@@ -179,11 +63,11 @@ to.read = file(cbbFile, "rb")
 # Scan CBC file for avaialble Budget Terms
 # and model characteristics
 #===============================================
-CBCTermSet <- listBinHeaders(to.read)
-ncols <- as.numeric(CBCTermSet[5])
-nrows <- as.numeric(CBCTermSet[4])
-nlays <- as.numeric(CBCTermSet[3])
-CBCterms <- unlist(CBCTermSet[6])
+CBCTermSet = listBinHeaders(to.read)
+ncols <- as.numeric(CBCTermSet[4])
+nrows <- as.numeric(CBCTermSet[3])
+nlays <- as.numeric(CBCTermSet[2])
+CBCterms <- unlist(CBCTermSet[[5]])
 
 #===============================================
 # Calculate number of stress periods in CBC file
@@ -255,6 +139,6 @@ DiffVectorBySP <-  array(DiffVector, dim = c(ncols, nrows, nlays, nsp))
 rchVectorBySP <- array(CBCdata1, dim=c(ncols,nrows,nlays,nsp))
 ETVectorBySP <- array(CBCdata2, dim=c(ncols,nrows,nlays,nsp))
 
-print(paste("max value:",max(NetRchBySP)))
+print(paste("max value:",max(ETVectorBySP)))
 
 source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ModflowBinary/netRCH_anim.R")
