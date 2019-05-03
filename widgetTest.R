@@ -1,0 +1,8 @@
+require(gWidgets)
+library(tcltk2)
+options("guiToolkit"="tcltk")
+win <- gwindow("Test", visible=TRUE)
+l <- gframe(container=win)
+z <- ggroup(container = l)
+gradio(item=c("Coffee", "Straw"), container=z)
+gradio(item=c("tea", "Vanilia"), container=z)

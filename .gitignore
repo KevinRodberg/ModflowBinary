@@ -1,9 +1,3 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-widgetTest.R
-testShinyFilechooser.R
-testShiny.R
-testButtonFactory.R
-radioBtns
+*.png
+.Rproj.*
+sharable/

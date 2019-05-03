@@ -1,0 +1,28 @@
+library(tcltk2)
+
+win1 <- tktoplevel()
+win1$env$rb1 <- tk2radiobutton(win1)
+win1$env$rb2 <- tk2radiobutton(win1)
+rbValue <- tclVar("oranges")
+tkconfigure(win1$env$rb1, variable = rbValue, value = "apples")
+tkconfigure(win1$env$rb2, variable = rbValue, value = "oranges")
+tkgrid(tk2label(win1, text = "Which fruits do you prefer?"),
+  columnspan = 2, padx = 10, pady = c(15, 5))
+tkgrid(tk2label(win1, text = "Apples"), win1$env$rb1,
+  padx = 10, pady = c(0, 5))
+tkgrid(tk2label(win1, ,text = "Oranges"), win1$env$rb2,
+  padx = 10, pady = c(0, 15))
+
+onOK <- function() {
+  rbVal <- as.character(tclvalue(rbValue))
+  tkdestroy(win1)
+  switch(rbVal,
+    "apples" = tkmessageBox(
+      message = "Good choice! An apple a day keeps the doctor away!"),
+    "oranges" = tkmessageBox(
+      message = "Good choice! Oranges are full of vitamin C!")
+  )
+}
+win1$env$butOK <- tk2button(win1, text = "OK", width = -6, command = onOK)
+tkgrid(win1$env$butOK, columnspan = 2, padx = 10, pady = c(5, 15))
+tkfocus(win1)

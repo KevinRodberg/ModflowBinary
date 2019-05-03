@@ -126,4 +126,3 @@ xf <-future_apply (HeadsMatrix,MARGIN=c(1,2),FUN=stats::quantile,probs=c(.2),na.
 toc()
 my.at = seq(-1,150,15)
 levelplot(raster(t(xf[,])),par.settings = yourTheme,at=my.at)
-
