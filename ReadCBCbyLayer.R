@@ -2,7 +2,8 @@ library (data.table)
 library(tcltk2)
 library(rModflow)
 
-source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ReusableFunctions/tclFuncs.R")
+setwd('R:/ModflowBinary/sharable')
+source ("./tclFuncs.R")
 
 #=================================================================
 # Beginning of Script
@@ -92,7 +93,4 @@ DiffVector <- CBCdata1 + CBCdata2
 print(paste("Adding: ", trimws(CBCterms[[n1]]), " + ", trimws(CBCterms[[n2]])))
 nsp = length(SP_rng)
 
-MFmodel <- model
-source (
-  "//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ModflowBinary/netRCH_anim.R"
 )
