@@ -27,8 +27,7 @@ pkgChecker <- function(x){
   }
 }
 
-suppressWarnings(pkgChecker(c("optparse")))
-
+suppressMessages(pkgChecker(c("optparse")))
 
 makeFIGS <- FALSE
 model <- "LWCSIM" 
@@ -87,7 +86,7 @@ list.of.packages <-c( "githubinstall","data.table","tcltk2","rModflow","devtools
                       "tictoc","tidyr","dplyr","plyr","future", 
                       "listenv","ggplot2")
 
-suppressWarnings(pkgChecker(list.of.packages))
+suppressMessages(pkgChecker(list.of.packages))
 tic.clear()
 tic("All Processes:")
 if (!"rModflow" %in% installed.packages()[,"Package"]) {

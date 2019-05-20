@@ -39,6 +39,19 @@ if (!"rModflow" %in% installed.packages()[,"Package"]) {
 source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ReusableFunctions/tclFuncs.R")
 
 getBinaryData<- function(headsFile, SP_rng, PointVector,M) {
+  #
+  # Retrieves a timeseries of Modflow head values for specific model cells
+  #
+  # Args:
+  #   headsFile:    Modflow binary heads file name
+  #   SP_rng:       User selected Stress Period Range defined in tclFuncs()
+  #   PointVector:  Array of model cell indices organized by (Lay,Row,Col) to select cells rom 3D Heads matrix
+  #   M:            M <- as.data.frame(MFmodel.Params[model,])
+  #     
+  # Returns:
+  #   A timeseries series of head values at specified model cell locations
+  #     
+  
   to.read = file(headsFile, "rb")
   pointValues <- rModflow::readHeadsbinAtPnts(to.read, SP_rng, PointVector)
   close(to.read)

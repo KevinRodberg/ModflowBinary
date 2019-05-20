@@ -17,38 +17,42 @@
 # //ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ModflowBinary/P80heads.R
 #==================================================================================================
 
-list.of.packages <-c( "data.table","devtools","utils",
-                      "tcltk2","rModflow",
-                      "future.apply","future","listenv",
-                      
-                      "rasterVis","sp","maptools","rgeos","raster",
-                      "ggplot2","RColorBrewer",
-                      "tictoc",
-                      "polynom")
-
-new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if (!'githubinstall' %in% installed.packages()[,"Package"]){
-  install.packages('githubinstall')
+#--
+#   package management:
+#     provide automated means for first time use of script to automatically 
+#	  install any new packages required for this code, with library calls 
+#	  wrapped in a for loop.
+#--
+pkgChecker <- function(x){
+  for( i in x ){
+    if( ! require( i , character.only = TRUE ) ){
+      install.packages( i , dependencies = TRUE )
+      require( i , character.only = TRUE )
+    }
+  }
 }
-if(length(new.packages)) install.packages(new.packages)
-library(devtools)
+
+list.of.packages <-c( "data.table","devtools","utils","githubinstall",
+                      "tcltk2","rModflow","future.apply","future","listenv",
+                      "rasterVis","sp","maptools","rgeos","raster",
+                      "ggplot2","RColorBrewer","tictoc","polynom")
+
+suppressWarnings(pkgChecker(list.of.packages))
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+
 if ("rModflow" %in% new.packages) devtools::install_github("KevinRodberg/rModflow")
 lapply(list.of.packages,require, character.only=TRUE)
 
 source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ReusableFunctions/tclFuncs.R")
+message <- "Do you want to use the same binary heads selections?\n"
 skip <- FALSE 
 if(exists('RCheadsFile') & exists('SIMheadsFile') ){
   if(file.exists(RCheadsFile) & file.exists(SIMheadsFile) ){
-    if (utils::askYesNo(paste("Do you want to use the same binary heads selections?\n",
-                               RCheadsFile,'\n',SIMheadsFile,'\n'),
+    if (utils::askYesNo(paste(message,RCheadsFile,'\n',SIMheadsFile,'\n'),
                         prompts = getOption("askYesNo", gettext(c("Yes", "No", "Cancel"))))){
       cat('Bypassing data selections \n')
       skip <- TRUE
-    } else { 
-      skip <- FALSE 
-    }
-  } else {
-    skip <- FALSE
+    } 
   }
 } 
 if (!skip){

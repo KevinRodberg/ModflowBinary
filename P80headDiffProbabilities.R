@@ -14,17 +14,30 @@
 #          by wetland type (ridge or plain) from stressed to unstressed and
 #          from unstressed to stressed.
 #==================================================================================================
-list.of.packages <-c( "data.table","devtools","utils","tcltk2","rModflow",
-                      "future.apply","future","listenv",
+#--
+#   package management:
+#     provide automated means for first time use of script to automatically 
+#	  install any new packages required for this code, with library calls 
+#	  wrapped in a for loop.
+#--
+pkgChecker <- function(x){
+  for( i in x ){
+    if( ! require( i , character.only = TRUE ) ){
+      install.packages( i , dependencies = TRUE )
+      require( i , character.only = TRUE )
+    }
+  }
+}
+
+list.of.packages <-c( "data.table","devtools","utils","githubinstall",
+                      "tcltk2","rModflow","future.apply","future","listenv",
                       "rasterVis","sp","maptools","rgeos","raster",
                       "ggplot2","RColorBrewer","tictoc","dplyr","polynom")
 
+suppressWarnings(pkgChecker(list.of.packages))
+
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if (!'githubinstall' %in% installed.packages()[,"Package"]){
-  install.packages('githubinstall')
-}
-if(length(new.packages)) install.packages(new.packages)
-library(devtools)
+
 if ("rModflow" %in% new.packages) devtools::install_github("KevinRodberg/rModflow")
 lapply(list.of.packages,require, character.only=TRUE)
 
@@ -396,7 +409,7 @@ if (!exists('Stats')){
   Stress<-rep(c(rep('Stressed',6),rep('Unstressed',6)),2)
   Phys<-rep(c('Ridge','Plain'),12)
   Stats<-data.frame(Layer,Class,Stress,Phys,stringsAsFactors=FALSE)
-  statColumns<-c('Initial','Delta')
+  statColumns<-c('Initial','Delta','Relative','Aquifer','exclude')
   Stats[statColumns]<-NA
 }
 
@@ -555,6 +568,10 @@ updateStatsInitial<- function(Stats,MFLay,t,c,class,Acres) {
 
 ip=0
 deltas = stack()
+if (MFLay == 1){
+  deltasByPhys = stack()
+}
+
 for (t in WetType) {
   ttlWetAcres = 0
   for (c in ZetaCond){
@@ -618,17 +635,27 @@ for (t in WetType) {
       filename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[1]),".png",sep="")
       acre.At = c(0,.5,1,2.5,5,7.5,10,max(c123sub$AreaXZus))
       deltaArea<- rasterize(c123sub,CFWIprobs,c123sub$AreaXZus)
+      cat(paste("Max acres for ", c, t, max(deltaArea@data@values,na.rm=T),'\n'))
       tiffilename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[1]),".tif",sep="")
     }else {
       title = paste0('Layer ',MFLay,' ',c,' ',t,' to ', ZetaCond[2], '\n',tabStats)
       filename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[2]),".png",sep="")
       acre.At = c(0,.5,1,2.5,5,7.5,10,max(c123sub$AreaXZsu,na.rm=TRUE))
       deltaArea<- rasterize(c123sub,CFWIprobs,c123sub$AreaXZsu)
+      cat(paste("Max acres for ", c, t, max(deltaArea@data@values,na.rm=T),'\n'))
       tiffilename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[2]),".tif",sep="")
     }
-    
+    if (MFLay == 1 & t == "Plain" ){
+      cat(paste('Adding Lay ',MFLay,' ',t,' to deltasByPhys stack \n'))
+      deltasByPhys <- stack(deltasByPhys,deltaArea)
+      cat(paste('Plains Lay1 step for deltasByPhys names After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
+    }
+    if (MFLay == 3 & t == "Ridge" ){
+      cat(paste('Adding Lay ',MFLay,' ',t,' to deltasByPhys stack \n'))
+      deltasByPhys <- stack(deltasByPhys,deltaArea)
+      cat(paste('Ridge Lay3 step for deltasByPhys names After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
+    }
     deltaArea[deltaArea==0]<-NA
-    
     if(!(MFLay ==3 & t == 'Plain')){
       if (cc=='NO'){
         yourTheme = rasterTheme(region = brewer.pal('YlOrRd', n = 9))
@@ -638,7 +665,8 @@ for (t in WetType) {
       }
           
       ip=ip+1
-      deltas <- stack(deltas,deltaArea)
+      cat(paste('Adding Lay ',MFLay,' ',t,' to deltas stack \n'))
+      deltas <- stack(deltas,deltaArea)                                                                
       pltGrphs[[ip]] <- future({
       myplot= (levelplot(deltaArea,par.settings = yourTheme,at=acre.At, main = title)+
                  latticeExtra::layer(sp.polygons(clpBnds2, col='darkgray'))+
@@ -658,18 +686,48 @@ for (t in WetType) {
 }
 if (MFLay == 1){
   names(deltas)<- c('Plain_StoU','Plain_UtoS','Ridge_StoU','Ridge_UtoS')
+  cat(paste('Before:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
+  names(deltasByPhys)<- c('Plain_StoU','Plain_UtoS')
+  cat(paste('After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
+  cat(paste('Switching sign on Stressed to Unstressed Plain','\n'))
   deltas$Plain_StoU <- deltas$Plain_StoU*(-1.0)
+  deltasByPhys$Plain_StoU <- deltasByPhys$Plain_StoU*(-1.0)
 } else {
   names(deltas)<- c('Ridge_StoU','Ridge_UtoS')
+  
+  cat(paste(deltas@layers[[1]]@data@max, deltas@layers[[2]]@data@max,'\n'))
+  cat(paste(deltasByPhys@layers[[1]]@data@max, deltasByPhys@layers[[2]]@data@max,'\n'))
+  cat(paste('Before Stack:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
+  
+  # deltasByPhys<-stack(deltasByPhys,deltas)
+  cat(paste(deltasByPhys@layers[[1]]@data@max, deltasByPhys@layers[[2]]@data@max, 
+            deltasByPhys@layers[[3]]@data@max, deltasByPhys@layers[[4]]@data@max,'\n'))
+  
+  cat(paste('deltasByPhys names Before:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
+  names(deltasByPhys)<- c('Plain_StoU','Plain_UtoS','Ridge_StoU','Ridge_UtoS')
+  cat(paste('deltasByPhys names After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
+  
 }
+cat(paste('Switching sign on Stressed to Unstressed Ridge','\n'))
 deltas$Ridge_StoU <- deltas$Ridge_StoU*(-1.0)
+
+# Layer 1 ridges aren't saved to this dataframe for final tiff
+if (MFLay == 3){
+  deltasByPhys$Ridge_StoU <- deltasByPhys$Ridge_StoU*(-1.0)
+}
+
 index<-names(deltas)
 FinalNetStress <- raster::stackApply(deltas,1,fun=base::sum,na.rm=TRUE)
 tiffilename=paste0(basePath,paste0('Lay',MFLay,"_NetStress.tif",sep=""))
+
+# export tiff with Layer 1 Plain and layer 3 Ridge stress Acres
+FinalNetStress2 <- raster::stackApply(deltasByPhys,1,fun=base::sum,na.rm=TRUE)
+tiffilename2=paste0(basePath,paste0('Lay',MFLay,"_NetStress2.tif",sep=""))
+
 ip=ip+1
 
 # extreme = max(abs(maxValue(FinalNetStress)), abs(minValue(FinalNetStress)))
-filename=paste(basePath,paste0('Lay',MFLay,"_NetStress.png",sep=""))
+filename=paste0(basePath,paste0('Lay',MFLay,"_NetStress.png",sep=""))
 title = paste0('Lay',MFLay,'_NetStress')
 if (lowQuantile <0){
   ramp<-c(seq(lowQuantile, -.01, length=5), seq(0.01, hiQuantile, length=5))
@@ -691,11 +749,21 @@ pltGrphs[[ip]] <- future({
 pltGrphs[[ip]] <- future({
   raster::writeRaster(FinalNetStress, tiffilename, format="GTiff", overwrite=TRUE)
 })
+pltGrphs[[ip]] <- future({
+  raster::writeRaster(FinalNetStress2, tiffilename2, format="GTiff", overwrite=TRUE)
+})
 
 toc()
 #==================================================================================================
 # Finished Creating maps
 #==================================================================================================
+Stats[Stats$Layer==1,]$Aquifer <- 'Water Table'
+Stats[Stats$Layer==3,]$Aquifer <- 'Upper Floridan'
+Stats[Stats$Stress=="Stressed",]$Relative <- Stats[Stats$Stress=="Stressed",]$Delta*(-1.0)
+Stats[Stats$Stress=="Unstressed",]$Relative <- Stats[Stats$Stress=="Unstressed",]$Delta
+Stats$exclude = FALSE
+Stats[Stats$Layer==1 & Stats$Phys =="Ridge",]$exclude = TRUE
+Stats[Stats$Layer==3 & Stats$Phys =="Plain",]$exclude = TRUE
 
 write.csv(Stats,paste0(basePath,'WetlandStressStats.csv'))
 #==================================================================================================
@@ -725,3 +793,4 @@ ggsave(plotfile,width = 10,height = 7.5,units = "in",dpi = 300,device = "png")
 
 #==================================================================================================
 toc()
+
