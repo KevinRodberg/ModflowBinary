@@ -80,12 +80,9 @@ if (!exists('Layer1SIM2d') | !exists('MFLay')) {
 tic('Create Differences from P80 Heads Layers')
 #==================================================================================================
 dataPath <- '//ad.sfwmd.gov/dfsroot/data/wsd/SUP/proj/CFWI_WetlandStress/Update2018'
-#dataPath <- 'C:/Users/Kevin/Desktop/ECFTX'
-
-#Hint: If I subtract from this diffrence I get Stressed Wetlands Recovering
-
 DiffLay %<-% (qRC - qSIM) 
 
+#Hint: If I subtract from this diffrence I get Stressed Wetlands Recovering
 #DiffLay <- (qSIM - qRC) -1.5
 
 #--------------------------------------------------------------------------------------------------
@@ -294,16 +291,26 @@ tic("Read Wetland datasets")
 # polys<-read.csv(paste0(dataPath,"/PolyCoeff2019.csv"))
 SFact<-read.csv(paste0(dataPath,"/StressFactor.csv"))
 
-#class1 %<-% read.csv(paste0(dataPath,"/WetlandsClass1_2018.csv"))
 class1 %<-% read.csv(paste0(dataPath,"/WetlandsClass1_2019.csv"))
-#class2 %<-% read.csv(paste0(dataPath,"/WetlandsClass2_2018.csv"))
 class2 %<-% read.csv(paste0(dataPath,"/WetlandsClass2_2019.csv"))
-#class3 %<-% read.csv(paste0(dataPath,"/WetlandsClass3_2018.csv"))
 class3 %<-% read.csv(paste0(dataPath,"/WetlandsClass3_2019v2.csv"))
 
 class1<- merge(x=class1, 
                y=Class1.Wetland.Info[,c('CFCA.EMT.ID','Stress.Status.in.2018')],
                by.x = "CFCA_EMT_I", by.y = 'CFCA.EMT.ID')
+
+class1Scale <- class1 %>% 
+  group_by(CFCA_EMT_I) %>%
+  summarize(sum(ACRES_COMB))
+class1Scale<-merge(class1Scale,Class1.Wetland.Info, by.x='CFCA_EMT_I' ,by.y='CFCA.EMT.ID')
+write.csv(class1Scale,paste0(dataPath,'/class1FromR.csv'))
+
+class2Scale <- class2 %>% 
+  group_by(CFCA_ID) %>%
+  summarize(sum(ACRES_COMB))
+temp <-unique(class2[,c(2,5,14,15,17,18)])
+class2Scale<-merge(class2Scale,temp, by.x='CFCA_ID' ,by.y='CFCA_ID')
+write.csv(class2Scale,paste0(dataPath,'/class2FromR.csv'))
 
 #NotNeeded <- c("OBJECTID","CFCA_EMT_1","PERCENT_AC","Shape_Length","Shape_Area")
 NotNeeded <- c("OBJECTID")
@@ -383,12 +390,18 @@ class3[vars4SF]<-NA
 #  Plain  Mod & High  0.616     0.581      0.824    0.176    0.295        0.063
 #  Ridge     All      0.671     1.000      0.581    0.419    0.390        0.281
 #---------------------------------------------------------------------------------
-class3[class3$Phys=='Plain',]$SFus = SFact[SFact$Wetland.Type=='Plain' & SFact$Urban.Density == 'low',]$Sfus
-class3[class3$Phys=='Plain',]$SFsu = SFact[SFact$Wetland.Type=='Plain' & SFact$Urban.Density == 'low',]$Sfsu
+class3[class3$Phys=='Plain',]$SFus = SFact[SFact$Wetland.Type=='Plain' &
+                                             SFact$Urban.Density == 'low',]$Sfus
 
-class3[class3$Phys=='Plain' &  (class3$Urban_Density=='Moderate' | class3$Urban_Density=='High') ,]$SFus =
+class3[class3$Phys=='Plain',]$SFsu = SFact[SFact$Wetland.Type=='Plain' &
+                                             SFact$Urban.Density == 'low',]$Sfsu
+
+class3[class3$Phys=='Plain' &  (class3$Urban_Density=='Moderate' |
+                                  class3$Urban_Density=='High') ,]$SFus =
   SFact[SFact$Wetland.Type=='Plain' & SFact$Urban.Density == 'Mod & High',]$Sfus
-class3[class3$Phys=='Plain' &  (class3$Urban_Density=='Moderate' | class3$Urban_Density=='High') ,]$SFsu = 
+
+class3[class3$Phys=='Plain' &  (class3$Urban_Density=='Moderate' |
+                                  class3$Urban_Density=='High') ,]$SFsu = 
   SFact[SFact$Wetland.Type=='Plain' & SFact$Urban.Density == 'Mod & High',]$Sfsu
 
 class3[class3$Phys=='Ridge',]$SFus = SFact[SFact$Wetland.Type=='Ridge',]$Sfus
@@ -409,7 +422,7 @@ if (!exists('Stats')){
   Stress<-rep(c(rep('Stressed',6),rep('Unstressed',6)),2)
   Phys<-rep(c('Ridge','Plain'),12)
   Stats<-data.frame(Layer,Class,Stress,Phys,stringsAsFactors=FALSE)
-  statColumns<-c('Initial','Delta','Relative','Aquifer','exclude')
+  statColumns<-c('Total','Initial','Delta','Relative','Aquifer','exclude')
   Stats[statColumns]<-NA
 }
 
@@ -592,7 +605,6 @@ for (t in WetType) {
       Stats<-updateStatsInitial(Stats,MFLay,t,c,2,Acres)
       Acres =  c3.pnts[c3.pnts$Phys ==t,]$Acres * c3.pnts[c3.pnts$Phys ==t,]$SFsu
       Stats<-updateStatsInitial(Stats,MFLay,t,c,3,Acres)
-      
     } else {
       cc<-'NO'
       c1sub <-c1.pnts[c1.pnts$Phys==t & c1.pnts$Stressed==cc,c('Phys','AreaXZus')]
@@ -612,11 +624,17 @@ for (t in WetType) {
       Stats<-updateStatsInitial(Stats,MFLay,t,c,2,Acres)
       Acres =  c3.pnts[c3.pnts$Phys ==t,]$Acres * c3.pnts[c3.pnts$Phys ==t,]$SFus
       Stats<-updateStatsInitial(Stats,MFLay,t,c,3,Acres)
-    }   
+    }  
+    
     if (MFLay == 3){
       Stats[Stats$Layer == 3 & Stats$Phys =='Plain' ,]$Delta<- 0
       Stats[Stats$Layer == 3 & Stats$Phys =='Plain' ,]$Initial<- 0
     }
+    #
+    # Calc total inital acres of each type and class
+    #
+
+    
     c1.delta<-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==1,]$Delta
     c2.delta<-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==2,]$Delta
     c3.delta<-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==3,]$Delta
@@ -682,6 +700,12 @@ for (t in WetType) {
         raster::writeRaster(deltaArea, tiffilename, format="GTiff", overwrite=TRUE)
       })
     }
+    Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==1,]$Total<-
+      sum(Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==1,]$Initial,na.rm=T)
+    Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==2,]$Total<-
+      sum(Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==2,]$Initial,na.rm=T)
+    Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==3,]$Total<-
+      sum(Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==3,]$Initial,na.rm=T)
   }
 }
 if (MFLay == 1){
@@ -757,12 +781,12 @@ toc()
 #==================================================================================================
 # Finished Creating maps
 #==================================================================================================
-Stats[Stats$Layer==1,]$Aquifer <- 'Water Table'
+Stats[Stats$Layer==1,]$Aquifer <- 'Surficial'
 Stats[Stats$Layer==3,]$Aquifer <- 'Upper Floridan'
 Stats[Stats$Stress=="Stressed",]$Relative <- Stats[Stats$Stress=="Stressed",]$Delta*(-1.0)
 Stats[Stats$Stress=="Unstressed",]$Relative <- Stats[Stats$Stress=="Unstressed",]$Delta
 Stats$exclude = FALSE
-Stats[Stats$Layer==1 & Stats$Phys =="Ridge",]$exclude = TRUE
+# Stats[Stats$Layer==1 & Stats$Phys =="Ridge",]$exclude = TRUE
 Stats[Stats$Layer==3 & Stats$Phys =="Plain",]$exclude = TRUE
 
 write.csv(Stats,paste0(basePath,'WetlandStressStats.csv'))
