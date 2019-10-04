@@ -185,9 +185,12 @@ diffRas %<-% raster::mask(diffRas, CFWIbnd)
 title = paste("Change in Head Layer ",MFLay,": \n",
               RCheadsFile, '\nminus\n',SIMheadsFile)
 
+# basePath <- paste0("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/proj/",
+#                    "CFWI_WetlandStress/Update2018/Figs4StressAcresSWUCA40/")
 basePath <- paste0("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/proj/",
-                   "CFWI_WetlandStress/Update2018/Figures4StressAcres/")
-
+                   "CFWI_WetlandStress/Update2018/Figures4StressAcresSWUCA25/")
+# basePath <- paste0("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/proj/",
+#                    "CFWI_WetlandStress/Update2018/Figures4StressAcresSWUCA30/")
 filename = paste0('p80headDiffLay',MFLay,'.tif')
 ip=ip+1
 pltGrphs[[ip]] <- future({
@@ -331,7 +334,7 @@ class1[class1$ImpervPercent>10,]$Imperv <-TRUE
 levels(class1$Stressed)[which(levels(class1$Stressed)=="Not Stressed")] <- "NO"
 levels(class1$Stressed)[which(levels(class1$Stressed)=="Stressed")] <- "YES"
 
-Needed <- c("CFCA_ID","ACRES_COMB","Ridge_or_P","SEQNUM","XCOORD_UTM" ,"YCOORD_UTM" ,"Stressed","nlcd11")
+Needed <- c("CFCA_ID","ACRES_COMB","Ridge_or_P","SEQNUM","XCOORD_UTM" ,"YCOORD_UTM" ,"Stressed","nlcd11","SpecialInt")
 
 class2 <- class2[,Needed]
 setnames(class2, "CFCA_ID", "CFCA_EMT_ID")
@@ -344,7 +347,7 @@ class2[class2$ImpervPercent>10,]$Imperv <-TRUE
 levels(class2$Phys)[which(levels(class2$Phys)=="Plains")] <- "Plain"
 
 Needed<-c("SEQNUM_1","Hydroclass","EcoHydro_T","Wetland_Ty","Urban_Dens","SusceptGW",   
-          "Class","XCOORD_UTM","YCOORD_UTM","ACRES_COMB","nlcd11")
+          "Class","XCOORD_UTM","YCOORD_UTM","ACRES_COMB","nlcd11","SpecialInt")
 
 class3 <- class3[,Needed]
 setnames(class3, "ACRES_COMB", "Acres")
@@ -430,11 +433,13 @@ tic('Calculate probable stress for wetlands')
 #  Create template dataframe for Stats
 #--------------------------------------------------------------------------------------------------
 if (!exists('Stats')){
-  Layer <- c(rep(1,12),rep(3,12))
-  Class<- rep(c(1,1,2,2,3,3,1,1,2,2,3,3),2)
-  Stress<-rep(c(rep('Stressed',6),rep('Unstressed',6)),2)
-  Phys<-rep(c('Ridge','Plain'),12)
-  Stats<-data.frame(Layer,Class,Stress,Phys,stringsAsFactors=FALSE)
+  Layer <- c(rep(1,24),rep(3,24))
+  Class <- rep(c(rep(1,8),rep(2,8),rep(3,8)),2)
+  Stress <- rep(rep(c(rep('Stressed',4),rep('Unstressed',4)),3),2)
+  Phys<- rep(rep(rep(c(rep('Plain',2),rep('Ridge',2)),2),3),2)
+  SpecialInt<-rep(rep(rep(rep(c("SWUCA", "non-SWUCA"),2),2),3),2)
+  Stats<-data.frame(Layer,Class,Stress,Phys,SpecialInt,stringsAsFactors=FALSE)
+  Stats<-unique(Stats)
   statColumns<-c('Total','Initial','Delta','Relative','Aquifer','exclude')
   Stats[statColumns]<-NA
 }
@@ -567,19 +572,21 @@ yourTheme = rasterTheme(region = brewer.pal('YlOrRd', n = 9))
 CFWIprobs <- raster::crop(probRas, extent(buffer(CFWIbnd,width=10000)))
 CFWIprobs <- raster::mask(CFWIprobs, CFWIbnd)
 
-updateStatsDelta<- function(Stats,MFLay,t,c,class,source) {
-  # cat(paste(Stats[Stats$Layer == MFLay & 
-  #                   Stats$Phys ==t & 
-  #                   Stats$Stress ==c & 
+updateStatsDelta<- function(Stats,MFLay,t,c,class,special,source) {
+  # cat(paste(Stats[Stats$Layer == MFLay &
+  #                   Stats$Phys ==t &
+  #                   Stats$Stress ==c &
   #                   Stats$Class==class,]$Delta,
   #           MFLay,t,c,class,sum(source,na.rm=T),'\n'))
+  
   Stats[Stats$Layer == MFLay & 
           Stats$Phys ==t & 
           Stats$Stress ==c & 
+          Stats$SpecialInt == special &
           Stats$Class==class,]$Delta <- round(sum(source,na.rm=T),2)
   return(Stats)
 }
-updateStatsInitial<- function(Stats,MFLay,t,c,class,Acres) {
+updateStatsInitial<- function(Stats,MFLay,t,c,class,special,Acres) {
   # cat(paste(Stats[Stats$Layer == MFLay & 
   #                   Stats$Phys ==t & 
   #                   Stats$Stress ==c & 
@@ -588,6 +595,7 @@ updateStatsInitial<- function(Stats,MFLay,t,c,class,Acres) {
   Stats[Stats$Layer == MFLay & 
           Stats$Phys ==t & 
           Stats$Stress ==c & 
+          Stats$SpecialInt == special &
           Stats$Class==class,]$Initial <- round(sum(Acres,na.rm=T),2)
   return(Stats)
 }
@@ -598,139 +606,163 @@ if (MFLay == 1){
   deltasByPhys = stack()
 }
 
-for (t in WetType) {
-  ttlWetAcres = 0
-  for (c in ZetaCond){
-    if (c == 'Stressed') {
-      cc <-'YES'
-      c1sub <-c1.pnts[c1.pnts$Phys==t & c1.pnts$Stressed==cc,c('Phys','AreaXZsu')]
-      c2sub <-c2.pnts[c2.pnts$Phys==t & c2.pnts$Stressed==cc,c('Phys','AreaXZsu')]
-      c3sub <-c3.pnts[c3.pnts$Phys==t ,c('Phys','AreaXZsu')]
-      c123sub<-rbind(c1sub,c2sub)
-      c123sub<-rbind(c123sub,c3sub)
-      Stats<-updateStatsDelta(Stats,MFLay,t,c,1,c1sub$AreaXZsu)
-      Stats<-updateStatsDelta(Stats,MFLay,t,c,2,c2sub$AreaXZsu)
-      Stats<-updateStatsDelta(Stats,MFLay,t,c,3,c3sub$AreaXZsu)
+InOrOut = c("SWUCA", "non-SWUCA")
 
-      Acres =   c1.pnts[c1.pnts$Phys ==t & c1.pnts$Stressed ==cc ,]$Acres
-      Stats<-updateStatsInitial(Stats,MFLay,t,c,1,Acres)
-      Acres =   c2.pnts[c2.pnts$Phys ==t & c2.pnts$Stressed ==cc ,]$Acres
-      Stats<-updateStatsInitial(Stats,MFLay,t,c,2,Acres)
-      Acres =  c3.pnts[c3.pnts$Phys ==t,]$Acres * c3.pnts[c3.pnts$Phys ==t,]$SFsu
-      Stats<-updateStatsInitial(Stats,MFLay,t,c,3,Acres)
-    } else {
-      cc<-'NO'
-      c1sub <-c1.pnts[c1.pnts$Phys==t & c1.pnts$Stressed==cc,c('Phys','AreaXZus')]
-      c2sub <-c2.pnts[c2.pnts$Phys==t & c2.pnts$Stressed==cc,c('Phys','AreaXZus')]
-      c3sub <-c3.pnts[c3.pnts$Phys==t,c('Phys','AreaXZus')]
-      
-      c123sub<-rbind(c1sub,c2sub)
-      c123sub<-rbind(c123sub,c3sub)
-      
-      Stats<-updateStatsDelta(Stats,MFLay,t,c,1,c1sub$AreaXZus)
-      Stats<-updateStatsDelta(Stats,MFLay,t,c,2,c2sub$AreaXZus)
-      Stats<-updateStatsDelta(Stats,MFLay,t,c,3,c3sub$AreaXZus)
-
-      Acres =   c1.pnts[c1.pnts$Phys ==t & c1.pnts$Stressed ==cc ,]$Acres
-      Stats<-updateStatsInitial(Stats,MFLay,t,c,1,Acres)
-      Acres =   c2.pnts[c2.pnts$Phys ==t & c2.pnts$Stressed ==cc ,]$Acres
-      Stats<-updateStatsInitial(Stats,MFLay,t,c,2,Acres)
-      Acres =  c3.pnts[c3.pnts$Phys ==t,]$Acres * c3.pnts[c3.pnts$Phys ==t,]$SFus
-      Stats<-updateStatsInitial(Stats,MFLay,t,c,3,Acres)
-    }  
-    
-    if (MFLay == 3){
-      Stats[Stats$Layer == 3 & Stats$Phys =='Plain' ,]$Delta<- 0
-      Stats[Stats$Layer == 3 & Stats$Phys =='Plain' ,]$Initial<- 0
-    }
-    #
-    # Calc total inital acres of each type and class
-    #
-
-    
-    c1.delta<-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==1,]$Delta
-    c2.delta<-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==2,]$Delta
-    c3.delta<-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==3,]$Delta
-    
-    c1.initial <-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==1,]$Initial
-    c2.initial <-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==2,]$Initial
-    c3.initial <-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==3,]$Initial
-    
-    tabStats = paste('c1=',round(c1.delta,2),'c2=',round(c2.delta,2),'c3=',round(c3.delta,2),'\n',
-                     round(sum(c1.delta,c2.delta,c3.delta),2),'/',
-                     round(sum(c1.initial,c2.initial,c3.initial),2),'=', 
-                     round(100*sum(c1.delta,c2.delta,c3.delta)/
-                             sum(c1.initial,c2.initial,c3.initial),2),'% of',t,'Wetlands')
-    if (c == ZetaCond[2]){
-      title = paste0('Layer ',MFLay,' ',c,' ',t,' to ', ZetaCond[1], '\n',tabStats)
-      filename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[1]),".png",sep="")
-      acre.At = c(0,.5,1,2.5,5,7.5,10,max(c123sub$AreaXZus))
-      deltaArea<- rasterize(c123sub,CFWIprobs,c123sub$AreaXZus)
-      cat(paste("Max acres for ", c, t, max(deltaArea@data@values,na.rm=T),'\n'))
-      tiffilename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[1]),".tif",sep="")
-    }else {
-      title = paste0('Layer ',MFLay,' ',c,' ',t,' to ', ZetaCond[2], '\n',tabStats)
-      filename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[2]),".png",sep="")
-      acre.At = c(0,.5,1,2.5,5,7.5,10,max(c123sub$AreaXZsu,na.rm=TRUE))
-      deltaArea<- rasterize(c123sub,CFWIprobs,c123sub$AreaXZsu)
-      cat(paste("Max acres for ", c, t, max(deltaArea@data@values,na.rm=T),'\n'))
-      tiffilename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[2]),".tif",sep="")
-    }
-    if (MFLay == 1 & t == "Plain" ){
-      cat(paste('Adding Lay ',MFLay,' ',t,' to deltasByPhys stack \n'))
-      deltasByPhys <- stack(deltasByPhys,deltaArea)
-      cat(paste('Plains Lay1 step for deltasByPhys names After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
-    }
-    if (MFLay == 3 & t == "Ridge" ){
-      cat(paste('Adding Lay ',MFLay,' ',t,' to deltasByPhys stack \n'))
-      deltasByPhys <- stack(deltasByPhys,deltaArea)
-      cat(paste('Ridge Lay3 step for deltasByPhys names After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
-    }
-    deltaArea[deltaArea==0]<-NA
-    if(!(MFLay ==3 & t == 'Plain')){
-      if (cc=='NO'){
-        yourTheme = rasterTheme(region = brewer.pal('YlOrRd', n = 9))
+for (i in InOrOut) {
+  for (t in WetType) {
+    ttlWetAcres = 0
+    for (c in ZetaCond){
+      if (c == 'Stressed') {
+        cc <-'YES'
+        c1sub <-c1.pnts[c1.pnts$Phys==t & c1.pnts$Stressed==cc & c1.pnts$SpecialInt == i,c('Phys','AreaXZsu')]
+        c2sub <-c2.pnts[c2.pnts$Phys==t & c2.pnts$Stressed==cc& c2.pnts$SpecialInt == i,c('Phys','AreaXZsu')]
+        c3sub <-c3.pnts[c3.pnts$Phys==t & c3.pnts$SpecialInt == i,c('Phys','AreaXZsu')]
+        c123sub<-rbind(c1sub,c2sub)
+        c123sub<-rbind(c123sub,c3sub)
+        if (length(c1sub$AreaXZsu) > 0) {
+          Stats<-updateStatsDelta(Stats,MFLay,t,c,1,i,c1sub$AreaXZsu)
+          Acres =   c1.pnts[c1.pnts$Phys ==t & c1.pnts$Stressed ==cc & c1.pnts$SpecialInt == i,]$Acres
+          Stats<-updateStatsInitial(Stats,MFLay,t,c,1,i,Acres)
+        }
+        if (length(c2sub$AreaXZsu) > 0) {
+          Stats<-updateStatsDelta(Stats,MFLay,t,c,2,i,c2sub$AreaXZsu)
+          Acres =   c2.pnts[c2.pnts$Phys ==t & c2.pnts$Stressed ==cc & c2.pnts$SpecialInt == i,]$Acres
+          Stats<-updateStatsInitial(Stats,MFLay,t,c,2,i,Acres)
+        }
+        if (length(c3sub$AreaXZsu) > 0) {
+          Stats<-updateStatsDelta(Stats,MFLay,t,c,3,i,c3sub$AreaXZsu)
+          Acres =  c3.pnts[c3.pnts$Phys ==t & c3.pnts$SpecialInt == i,]$Acres * 
+            c3.pnts[c3.pnts$Phys ==t & c3.pnts$SpecialInt == i,]$SFsu
+          Stats<-updateStatsInitial(Stats,MFLay,t,c,3,i,Acres)
+        }
       } else {
-        yourTheme = rasterTheme(region = brewer.pal('YlGn', n = 9))
+        cc<-'NO'
+        c1sub <-c1.pnts[c1.pnts$Phys==t & c1.pnts$Stressed==cc & c1.pnts$SpecialInt == i,c('Phys','AreaXZus')]
+        c2sub <-c2.pnts[c2.pnts$Phys==t & c2.pnts$Stressed==cc & c2.pnts$SpecialInt == i,c('Phys','AreaXZus')]
+        c3sub <-c3.pnts[c3.pnts$Phys==t  & c3.pnts$SpecialInt == i,c('Phys','AreaXZus')]
         
+        if( length(c1sub)+length(c2sub) >0){
+          c123sub<-rbind(c1sub,c2sub)
+          c123sub<-rbind(c123sub,c3sub)
+        } else
+        {
+          c123sub <- c3sub
+        }
+
+        if (length(c1sub$AreaXZus) > 0) {
+          Stats<-updateStatsDelta(Stats,MFLay,t,c,1,i,c1sub$AreaXZus)
+          Acres =   c1.pnts[c1.pnts$Phys ==t & c1.pnts$Stressed ==cc & c1.pnts$SpecialInt == i,]$Acres
+          Stats<-updateStatsInitial(Stats,MFLay,t,c,1,i,Acres)
+        }
+        if (length(c2sub$AreaXZus) > 0) {
+          Stats<-updateStatsDelta(Stats,MFLay,t,c,2,i,c2sub$AreaXZus)
+          Acres =   c2.pnts[c2.pnts$Phys ==t & c2.pnts$Stressed ==cc & c2.pnts$SpecialInt == i,]$Acres
+          Stats<-updateStatsInitial(Stats,MFLay,t,c,2,i,Acres)
+        }
+        if (length(c3sub$AreaXZus) > 0) {
+          Stats<-updateStatsDelta(Stats,MFLay,t,c,3,i,c3sub$AreaXZus)
+          Acres =  c3.pnts[c3.pnts$Phys ==t & c3.pnts$SpecialInt == i,]$Acres * 
+            c3.pnts[c3.pnts$Phys ==t & c3.pnts$SpecialInt == i,]$SFus
+          Stats<-updateStatsInitial(Stats,MFLay,t,c,3,i,Acres)
+        }
+      }  
+      
+      if (MFLay == 3){
+        Stats[Stats$Layer == 3 & Stats$Phys =='Plain' ,]$Delta<- 0
+        Stats[Stats$Layer == 3 & Stats$Phys =='Plain' ,]$Initial<- 0
       }
+      #
+      # Calc total inital acres of each type and class
+      #
+      
+      
+      c1.delta<-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==1 & Stats$SpecialInt==i,]$Delta
+      c2.delta<-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==2 & Stats$SpecialInt==i,]$Delta
+      c3.delta<-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==3 & Stats$SpecialInt==i,]$Delta
+      
+      c1.initial <-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==1 & Stats$SpecialInt==i,]$Initial
+      c2.initial <-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==2 & Stats$SpecialInt==i,]$Initial
+      c3.initial <-Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Stress ==c & Stats$Class==3 & Stats$SpecialInt==i,]$Initial
+      
+      tabStats = paste('c1=',round(c1.delta,2),'c2=',round(c2.delta,2),'c3=',round(c3.delta,2),'\n',
+                       round(sum(c1.delta,c2.delta,c3.delta),2),'/',
+                       round(sum(c1.initial,c2.initial,c3.initial),2),'=', 
+                       round(100*sum(c1.delta,c2.delta,c3.delta)/
+                               sum(c1.initial,c2.initial,c3.initial),2),'% of',t,'Wetlands')
+      if (c == ZetaCond[2]){
+        title = paste0('Layer ',MFLay,' ',c,' ',t,' to ', ZetaCond[1], '\n',tabStats)
+        filename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[1]),".png",sep="")
+        acre.At = c(0,.5,1,2.5,5,7.5,10,max(c123sub$AreaXZus))
+        deltaArea<- rasterize(c123sub,CFWIprobs,c123sub$AreaXZus)
+      #  cat(paste("Max acres for ", c, t, max(deltaArea@data@values,na.rm=T),'\n'))
+        tiffilename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[1]),".tif",sep="")
+      }else {
+        title = paste0('Layer ',MFLay,' ',c,' ',t,' to ', ZetaCond[2], '\n',tabStats)
+        filename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[2]),".png",sep="")
+        acre.At = c(0,.5,1,2.5,5,7.5,10,max(c123sub$AreaXZsu,na.rm=TRUE))
+        deltaArea<- rasterize(c123sub,CFWIprobs,c123sub$AreaXZsu)
+      #  cat(paste("Max acres for ", c, t, max(deltaArea@data@values,na.rm=T),'\n'))
+        tiffilename=paste(basePath,paste0('Lay',MFLay,t,'-',c,'_to_',ZetaCond[2]),".tif",sep="")
+      }
+      if (MFLay == 1 & t == "Plain" ){
+        cat(paste('Adding Lay ',MFLay,' ',t,' to deltasByPhys stack \n'))
+        deltasByPhys <- stack(deltasByPhys,deltaArea)
+        cat(paste('Plains Lay1 step for deltasByPhys names After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
+      }
+      if (MFLay == 3 & t == "Ridge" ){
+        cat(paste('Adding Lay ',MFLay,' ',t,' to deltasByPhys stack \n'))
+        deltasByPhys <- stack(deltasByPhys,deltaArea)
+        cat(paste('Ridge Lay3 step for deltasByPhys names After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
+      }
+      deltaArea[deltaArea==0]<-NA
+      if(!(MFLay ==3 & t == 'Plain')){
+        if (cc=='NO'){
+          yourTheme = rasterTheme(region = brewer.pal('YlOrRd', n = 9))
+        } else {
+          yourTheme = rasterTheme(region = brewer.pal('YlGn', n = 9))
           
-      ip=ip+1
-      cat(paste('Adding Lay ',MFLay,' ',t,' to deltas stack \n'))
-      deltas <- stack(deltas,deltaArea)                                                                
-      pltGrphs[[ip]] <- future({
-      myplot= (levelplot(deltaArea,par.settings = yourTheme,at=acre.At, main = title)+
-                 latticeExtra::layer(sp.polygons(clpBnds2, col='darkgray'))+
-                 latticeExtra::layer(sp.polygons(physiobnd, col='brown'))+
-                 latticeExtra::layer(sp.polygons(SomeLakes, col='blue'))+
-                 latticeExtra::layer(sp.polygons(CFWIbnd, col='red')))
-      trellis.device(device="png", filename=filename, width=3000,height=4500,units="px",res=300)
-      print(myplot)
-      dev.off()
-      })
-      ip=ip+1
-      pltGrphs[[ip]] <- future({
-        raster::writeRaster(deltaArea, tiffilename, format="GTiff", overwrite=TRUE)
-      })
+        }
+        
+        ip=ip+1
+        cat(paste('Adding Lay ',MFLay,' ',t,' to deltas stack \n'))
+        deltas <- stack(deltas,deltaArea)                                                                
+        pltGrphs[[ip]] <- future({
+          myplot= (levelplot(deltaArea,par.settings = yourTheme,at=acre.At, main = title)+
+                     latticeExtra::layer(sp.polygons(clpBnds2, col='darkgray'))+
+                     latticeExtra::layer(sp.polygons(physiobnd, col='brown'))+
+                     latticeExtra::layer(sp.polygons(SomeLakes, col='blue'))+
+                     latticeExtra::layer(sp.polygons(CFWIbnd, col='red')))
+          trellis.device(device="png", filename=filename, width=3000,height=4500,units="px",res=300)
+          print(myplot)
+          dev.off()
+        })
+        ip=ip+1
+        pltGrphs[[ip]] <- future({
+          raster::writeRaster(deltaArea, tiffilename, format="GTiff", overwrite=TRUE)
+        })
+      }
+      Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==1 & Stats$SpecialInt==i,]$Total<-
+        sum(Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==1 & Stats$SpecialInt==i,]$Initial,na.rm=T)
+      Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==2 & Stats$SpecialInt==i,]$Total<-
+        sum(Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==2 & Stats$SpecialInt==i,]$Initial,na.rm=T)
+      Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==3 & Stats$SpecialInt==i,]$Total<-
+        sum(Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==3 & Stats$SpecialInt==i,]$Initial,na.rm=T)
     }
-    Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==1,]$Total<-
-      sum(Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==1,]$Initial,na.rm=T)
-    Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==2,]$Total<-
-      sum(Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==2,]$Initial,na.rm=T)
-    Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==3,]$Total<-
-      sum(Stats[Stats$Layer == MFLay & Stats$Phys ==t & Stats$Class==3,]$Initial,na.rm=T)
   }
 }
 if (MFLay == 1){
-  names(deltas)<- c('Plain_StoU','Plain_UtoS','Ridge_StoU','Ridge_UtoS')
+  names(deltas)<- c('Plain_StoU_SWUCA','Plain_UtoS_SWUCA','Ridge_StoU_SWUCA','Ridge_UtoS_SWUCA',
+                    'Plain_StoU_NonSWUCA','Plain_UtoS_NonSWUCA','Ridge_StoU_NonSWUCA','Ridge_UtoS_NonSWUCA')
   cat(paste('Before:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
-  names(deltasByPhys)<- c('Plain_StoU','Plain_UtoS')
+  names(deltasByPhys)<- c('Plain_StoU_SWUCA','Plain_UtoS_SWUCA','Plain_StoU_NonSWUCA','Plain_UtoS_NonSWUCA')
   cat(paste('After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
   cat(paste('Switching sign on Stressed to Unstressed Plain','\n'))
-  deltas$Plain_StoU <- deltas$Plain_StoU*(-1.0)
-  deltasByPhys$Plain_StoU <- deltasByPhys$Plain_StoU*(-1.0)
+  deltas$Plain_StoU_SWUCA <- deltas$Plain_StoU_SWUCA*(-1.0)
+  deltas$Plain_StoU_NonSWUCA <- deltas$Plain_StoU_NonSWUCA*(-1.0)
+  deltasByPhys$Plain_StoU_SWUCA <- deltasByPhys$Plain_StoU_SWUCA*(-1.0)
+  deltasByPhys$Plain_StoU_NonSWUCA <- deltasByPhys$Plain_StoU_NonSWUCA*(-1.0)
 } else {
-  names(deltas)<- c('Ridge_StoU','Ridge_UtoS')
+  names(deltas)<- c('Ridge_StoU_SWUCA','Ridge_UtoS_SWUCA','Ridge_StoU_NonSWUCA','Ridge_UtoS_NonSWUCA')
   
   cat(paste(deltas@layers[[1]]@data@max, deltas@layers[[2]]@data@max,'\n'))
   cat(paste(deltasByPhys@layers[[1]]@data@max, deltasByPhys@layers[[2]]@data@max,'\n'))
@@ -741,16 +773,19 @@ if (MFLay == 1){
             deltasByPhys@layers[[3]]@data@max, deltasByPhys@layers[[4]]@data@max,'\n'))
   
   cat(paste('deltasByPhys names Before:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
-  names(deltasByPhys)<- c('Plain_StoU','Plain_UtoS','Ridge_StoU','Ridge_UtoS')
+  names(deltasByPhys)<- c('Plain_StoU_SWUCA','Plain_UtoS_SWUCA','Ridge_StoU_SWUCA','Ridge_UtoS_SWUCA',
+                          'Plain_StoU_NonSWUCA','Plain_UtoS_NonSWUCA','Ridge_StoU_NonSWUCA','Ridge_UtoS_NonSWUCA')
   cat(paste('deltasByPhys names After:', paste( unlist(names(deltasByPhys)), collapse=' ') ,'\n'))
   
 }
 cat(paste('Switching sign on Stressed to Unstressed Ridge','\n'))
-deltas$Ridge_StoU <- deltas$Ridge_StoU*(-1.0)
+deltas$Ridge_StoU_SWUCA <- deltas$Ridge_StoU_SWUCA*(-1.0)
+deltas$Ridge_StoU_NonSWUCA <- deltas$Ridge_StoU_NonSWUCA*(-1.0)
 
 # Layer 1 ridges aren't saved to this dataframe for final tiff
 if (MFLay == 3){
-  deltasByPhys$Ridge_StoU <- deltasByPhys$Ridge_StoU*(-1.0)
+  deltasByPhys$Ridge_StoU_SWUCA <- deltasByPhys$Ridge_StoU_SWUCA*(-1.0)
+  deltasByPhys$Ridge_StoU_NonSWUCA <- deltasByPhys$Ridge_StoU_NonSWUCA*(-1.0)
 }
 
 index<-names(deltas)
@@ -802,27 +837,29 @@ Stats$exclude = FALSE
 # Stats[Stats$Layer==1 & Stats$Phys =="Ridge",]$exclude = TRUE
 Stats[Stats$Layer==3 & Stats$Phys =="Plain",]$exclude = TRUE
 
-write.csv(Stats,paste0(basePath,'WetlandStressStats.csv'))
+write.csv(Stats,paste0(basePath,'WetlandStressStats_SWUCA.csv'))
 #==================================================================================================
 # Create Bar Charts from Wetland Stats
 #==================================================================================================
 
 colours <- c("red", "orange", "blue", "yellow", "green")
-longStats<-melt(Stats,id.vars=1:4)
+longStats<-melt(Stats,id.vars=1:5)
 longStats<-within(longStats, Class <- factor(Class))
-
+longStats<-within(longStats, variable <- factor(variable))
+longStats$variable <- factor(longStats$variable,levels = c("Total","Initial","Delta","Relative","Aquifer","exclude" ))
+longStats$value <- as.numeric(longStats$value)
 pieces<-unlist(strsplit(RCheadsFile,"[\\\\]|[^[:print:]]"))
 RCtitle <- pieces[length(pieces)-1]
 pieces<-unlist(strsplit(SIMheadsFile,"[\\\\]|[^[:print:]]"))
 SIMtitle <- pieces[length(pieces)-1]
 L = MFLay
-
-ggplot(longStats[longStats$variable=='Delta' & longStats$Layer == L,], 
-       aes(x = paste(Stress,Phys), y = value, 
+longStats<- longStats[order(longStats$Layer,longStats$SpecialInt, longStats$Class,longStats$Phys,longStats$Stress, longStats$variable),]
+ggplot(longStats[longStats$variable %in% c('Delta') & longStats$Layer == L,], 
+              aes(x = paste(SpecialInt,variable,Phys,Stress), y = value, 
            fill = Class)) +
   geom_bar(stat = 'identity') +
   xlab("Initial Condition") +
-  ylab("Acres of Change") +
+  ylab("Acres of Change") +theme(axis.text.x = element_text(angle = 90, hjust = 1))
   ggtitle(paste0("Layer",L,'\n',RCtitle,' minus ',SIMtitle))
 plotfile =paste0(basePath,'Lay',L,'Barchart.png')
 ggsave(plotfile,width = 10,height = 7.5,units = "in",dpi = 300,device = "png")

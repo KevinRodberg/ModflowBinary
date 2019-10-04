@@ -32,7 +32,8 @@ pkgChecker <- function(x){
 list.of.packages <-c( "data.table","devtools","utils","githubinstall",
                       "tcltk2","rModflow","future.apply","future","listenv",
                       "rasterVis","sp","maptools","rgeos","raster",
-                      "ggplot2","RColorBrewer","tictoc","dplyr","polynom")
+                      "ggplot2","RColorBrewer","tictoc","dplyr","polynom","readxl")
+
 
 suppressWarnings(pkgChecker(list.of.packages))
 
@@ -291,12 +292,9 @@ tic("Read Wetland datasets")
 # polys<-read.csv(paste0(dataPath,"/PolyCoeff2019.csv"))
 SFact<-read.csv(paste0(dataPath,"/StressFactor.csv"))
 
-# class1 %<-% read.csv(paste0(dataPath,"/WetlandsClass1_2019v2.csv"))
-class1 %<-% read.csv(paste0(dataPath,"/WetlandsClass1_2019v2imperv.csv"))
-# class2 %<-% read.csv(paste0(dataPath,"/WetlandsClass2_2019v3.csv"))
-class2 %<-% read.csv(paste0(dataPath,"/WetlandsClass2_2019v3imperv.csv"))
-# class3 %<-% read.csv(paste0(dataPath,"/WetlandsClass3_2019v2.csv"))
-class3 %<-% read.csv(paste0(dataPath,"/WetlandsClass3_2019v2imperv.csv"))
+class1 %<-% read.csv(paste0(dataPath,"/WetlandsClass1_2019.csv"))
+class2 %<-% read.csv(paste0(dataPath,"/WetlandsClass2_2019.csv"))
+class3 %<-% read.csv(paste0(dataPath,"/WetlandsClass3_2019v2.csv"))
 
 class1<- merge(x=class1, 
                y=Class1.Wetland.Info[,c('CFCA.EMT.ID','Stress.Status.in.2018')],
@@ -304,15 +302,14 @@ class1<- merge(x=class1,
 
 class1Scale <- class1 %>% 
   group_by(CFCA_EMT_I) %>%
-  summarize(sum(ACRES_COMB),mean(nlcd11))
+  summarize(sum(ACRES_COMB))
 class1Scale<-merge(class1Scale,Class1.Wetland.Info, by.x='CFCA_EMT_I' ,by.y='CFCA.EMT.ID')
 write.csv(class1Scale,paste0(dataPath,'/class1FromR.csv'))
 
 class2Scale <- class2 %>% 
   group_by(CFCA_ID) %>%
   summarize(sum(ACRES_COMB))
-# temp <-unique(class2[,c(2,5,14,15,17,18,37)])
-temp <-unique(class2[,c(4,7,16,17,19,20,37)])
+temp <-unique(class2[,c(2,5,14,15,17,18)])
 class2Scale<-merge(class2Scale,temp, by.x='CFCA_ID' ,by.y='CFCA_ID')
 write.csv(class2Scale,paste0(dataPath,'/class2FromR.csv'))
 
@@ -324,36 +321,27 @@ setnames(class1, "Wetland_Ty", "Wetland_Type")
 setnames(class1, "Physiograp", "Phys")
 setnames(class1, "Stress.Status.in.2018", "Stressed")
 setnames(class1, "ACRES_COMB", "Acres")
-setnames(class1, "nlcd11", "ImpervPercent")
-class1$Imperv <-FALSE
-class1[class1$ImpervPercent>10,]$Imperv <-TRUE
 
 levels(class1$Stressed)[which(levels(class1$Stressed)=="Not Stressed")] <- "NO"
 levels(class1$Stressed)[which(levels(class1$Stressed)=="Stressed")] <- "YES"
 
-Needed <- c("CFCA_ID","ACRES_COMB","Ridge_or_P","SEQNUM","XCOORD_UTM" ,"YCOORD_UTM" ,"Stressed","nlcd11")
+Needed <- c("CFCA_ID","ACRES_COMB","Ridge_or_Plains","SEQNUM","XCOORD_UTM" ,"YCOORD_UTM" ,"Stressed")
 
 class2 <- class2[,Needed]
 setnames(class2, "CFCA_ID", "CFCA_EMT_ID")
 setnames(class2, "ACRES_COMB", "Acres")
-setnames(class2, "Ridge_or_P", "Phys")
-setnames(class2, "nlcd11", "ImpervPercent")
-class2$Imperv <-FALSE
-class2[class2$ImpervPercent>10,]$Imperv <-TRUE
+setnames(class2, "Ridge_or_Plains", "Phys")
 
 levels(class2$Phys)[which(levels(class2$Phys)=="Plains")] <- "Plain"
 
-Needed<-c("SEQNUM_1","Hydroclass","EcoHydro_T","Wetland_Ty","Urban_Dens","SusceptGW",   
-          "Class","XCOORD_UTM","YCOORD_UTM","ACRES_COMB","nlcd11")
+Needed<-c("SEQNUM","Hydroclass","EcoHydro_T","Wetland_Ty","Urban_Dens","SusceptGW",   
+          "Class","XCOORD_UTM","YCOORD_UTM","ACRES_COMB")
 
 class3 <- class3[,Needed]
 setnames(class3, "ACRES_COMB", "Acres")
 setnames(class3, "Wetland_Ty", "Phys")
 setnames(class3, "Urban_Dens", "Urban_Density")
-setnames(class3, "SEQNUM_1", "SEQNUM")
-setnames(class3, "nlcd11", "ImpervPercent")
-class3$Imperv <-FALSE
-class3[class3$ImpervPercent>10,]$Imperv <-TRUE
+
 
 vars4AreaZ <- c("Zus","Zsu")
 class1[vars4AreaZ]<- NA
@@ -443,6 +431,7 @@ WetType = c("Plain" ,"Ridge")
 
 WetCond<-c('YES', 'NO')
 ZetaCond<-c('Stressed', 'Unstressed')
+ZetaCond<-c('Stressed', 'Not Stressed')
 
 #--------------------------------------------------------------------------------------------------
 #  Read zeta Models created by ZetaCalcIntegrals.R rather than polyCoeff.csv 
@@ -450,6 +439,10 @@ ZetaCond<-c('Stressed', 'Unstressed')
 #workdir= "Y:/proj/CFWI_WetlandStress/Update2018"
 workdir= "//ad.sfwmd.gov/dfsroot/data/wsd/SUP/proj/CFWI_WetlandStress/Update2018"
 zetaModels=readRDS( paste0(workdir,"zetaModels.RDS"))
+SummaryTest <- read_excel("Y:/proj/CFWI_WetlandStress/Wetland Data Set for Algorithm Testing 2019-06-29.xlsx", 
+                                       sheet = "TestData")
+SummaryTest[vars4AreaZ]<-NA
+SummaryTest[vars4SF]<-1.0
 
 #--------------------------------------------------------------------------------------------------
 #  Function to create probLay matrix of probabilities 
@@ -466,6 +459,7 @@ getProbLay<- function(DiffLay,NegModel,PosModel){
 }
 ip=0
 ipl=0
+DiffVec <- SummaryTest$delta_theta
 for (c in ZetaCond){
   p<- NULL
   probLay<- (DiffLay*0)
@@ -479,14 +473,14 @@ for (c in ZetaCond){
       probTitle <- 'Stressed to Unstressed'
       }
     ipl=ipl+1
-    if (t == 'Ridge' & c == 'Unstressed'){
-      probLay<-getProbLay(DiffLay,zetaModels$ZRPu_sNeg,zetaModels$ZRPu_sPos)
+    if (t == 'Ridge' & c == 'Not Stressed'){
+      probLay<-getProbLay(DiffVec,zetaModels$ZRPu_sNeg,zetaModels$ZRPu_sPos)
     } else if (t == 'Ridge' & c == 'Stressed'){
-      probLay<-getProbLay(DiffLay,zetaModels$ZRPs_uNeg,zetaModels$ZRPs_uPos)
-    } else if (t == 'Plain' & c == 'Unstressed'){
-      probLay<-getProbLay(DiffLay,zetaModels$ZPPu_sNeg,zetaModels$ZPPu_sPos)
+      probLay<-getProbLay(DiffVec,zetaModels$ZRPs_uNeg,zetaModels$ZRPs_uPos)
+    } else if (t == 'Plain' & c == 'Not Stressed'){
+      probLay<-getProbLay(DiffVec,zetaModels$ZPPu_sNeg,zetaModels$ZPPu_sPos)
     }else if (t == 'Plain' & c == 'Stressed'){
-      probLay<-getProbLay(DiffLay,zetaModels$ZPPs_uNeg,zetaModels$ZPPs_uPos)
+      probLay<-getProbLay(DiffVec,zetaModels$ZPPs_uNeg,zetaModels$ZPPs_uPos)
     } else {
       cat('Something goofed up!\n')
       cat(paste(c, t))
@@ -496,33 +490,71 @@ for (c in ZetaCond){
     #--------------------------------------------------------------------------
     #  probLay matrix of probabilities is intersected w/wetlands pnts by SEQNUM
     #--------------------------------------------------------------------------
-    zetaCol <-match(paste0('Z',zetaName),names(class1))
-    class1[class1$Phys == t & class1$Stressed ==cc,zetaCol] <-
-      round(probLay[class1[class1$Phys == t & class1$Stressed ==cc,]$SEQNUM],8)
+    zetaCol <-match(paste0('Z',zetaName),names(SummaryTest))
+    SummaryTest[SummaryTest$Phys == t & SummaryTest$Status ==c,zetaCol] <-
+      round(probLay[SummaryTest[SummaryTest$Phys == t & SummaryTest$Status ==c,]$Seq],8)
     
-    zetaCol <-match(paste0('Z',zetaName),names(class2))
-    class2[class2$Phys == t & class2$Stressed ==cc,zetaCol] <-
-      round(probLay[class2[class2$Phys == t & class2$Stressed ==cc,]$SEQNUM],8)
-    
-    # Initial stress condition is not know for class 3
-    zetaCol <-match(paste0('Z',zetaName),names(class3))
-    class3[class3$Phys == t,zetaCol] <-
-      round(probLay[class3[class3$Phys == t,]$SEQNUM],8)
-    #--------------------------------------------------------------------------
-    # Crop raster data by extent of CFWI bndry
-    #--------------------------------------------------------------------------
-    
-    probRas<-raster::raster(t(probLay[,]),rasExt[1:4], crs=HARNSP17ft)    
-    yourTheme = rasterTheme(region = brewer.pal('YlOrRd', n = 9))
-    CFWIprobs <- raster::crop(probRas, extent(buffer(CFWIbnd,width=10000)))
-    CFWIprobs <- raster::mask(CFWIprobs, CFWIbnd)
-    ip=ip+1
-    pltGrphs[[ip]] <- future({
-      plotTiffAndPng(CFWIprobs,paste('CFWIprob',t,probTitle)) 
-    })
-     
   }
 }
+# ip=0
+# ipl=0
+# for (c in ZetaCond){
+#   p<- NULL
+#   probLay<- (DiffLay*0)
+#   for (t in WetType) {
+#     cc = 'NO'
+#     zetaName = 'us'
+#     probTitle <- 'Unstressed to Stressed'
+#     if(c == 'Stressed'){
+#       cc = 'YES'
+#       zetaName = 'su'
+#       probTitle <- 'Stressed to Unstressed'
+#     }
+#     ipl=ipl+1
+#     if (t == 'Ridge' & c == 'Unstressed'){
+#       probLay<-getProbLay(DiffLay,zetaModels$ZRPu_sNeg,zetaModels$ZRPu_sPos)
+#     } else if (t == 'Ridge' & c == 'Stressed'){
+#       probLay<-getProbLay(DiffLay,zetaModels$ZRPs_uNeg,zetaModels$ZRPs_uPos)
+#     } else if (t == 'Plain' & c == 'Unstressed'){
+#       probLay<-getProbLay(DiffLay,zetaModels$ZPPu_sNeg,zetaModels$ZPPu_sPos)
+#     }else if (t == 'Plain' & c == 'Stressed'){
+#       probLay<-getProbLay(DiffLay,zetaModels$ZPPs_uNeg,zetaModels$ZPPs_uPos)
+#     } else {
+#       cat('Something goofed up!\n')
+#       cat(paste(c, t))
+#     }
+#     probLay[probLay<0] <- 0
+#     probLay[probLay>1] <- 1
+#     #--------------------------------------------------------------------------
+#     #  probLay matrix of probabilities is intersected w/wetlands pnts by SEQNUM
+#     #--------------------------------------------------------------------------
+#     zetaCol <-match(paste0('Z',zetaName),names(class1))
+#     class1[class1$Phys == t & class1$Stressed ==cc,zetaCol] <-
+#       round(probLay[class1[class1$Phys == t & class1$Stressed ==cc,]$SEQNUM],8)
+#     
+#     zetaCol <-match(paste0('Z',zetaName),names(class2))
+#     class2[class2$Phys == t & class2$Stressed ==cc,zetaCol] <-
+#       round(probLay[class2[class2$Phys == t & class2$Stressed ==cc,]$SEQNUM],8)
+#     
+#     # Initial stress condition is not know for class 3
+#     zetaCol <-match(paste0('Z',zetaName),names(class3))
+#     class3[class3$Phys == t,zetaCol] <-
+#       round(probLay[class3[class3$Phys == t,]$SEQNUM],8)
+#     #--------------------------------------------------------------------------
+#     # Crop raster data by extent of CFWI bndry
+#     #--------------------------------------------------------------------------
+#     
+#     probRas<-raster::raster(t(probLay[,]),rasExt[1:4], crs=HARNSP17ft)    
+#     yourTheme = rasterTheme(region = brewer.pal('YlOrRd', n = 9))
+#     CFWIprobs <- raster::crop(probRas, extent(buffer(CFWIbnd,width=10000)))
+#     CFWIprobs <- raster::mask(CFWIprobs, CFWIbnd)
+#     ip=ip+1
+#     pltGrphs[[ip]] <- future({
+#       plotTiffAndPng(CFWIprobs,paste('CFWIprob',t,probTitle)) 
+#     })
+#     
+#   }
+# }
 #--------------------------------------------------------------------------
 #  Class 1, 2, & 3 wetland probable change in area is calculated as
 #   Stressed becoming unstressed:
@@ -531,6 +563,14 @@ for (c in ZetaCond){
 #   Unstressed becoming stressed:
 #     AreaXZus = Acres * SFus * probs
 #--------------------------------------------------------------------------
+SummaryTest <- SummaryTest %>% mutate(AreaXZsu = Acres*SFsu*Zsu)
+SummaryTest <- SummaryTest %>% mutate(AreaXZus = Acres*SFus*Zus)
+DT <- data.table(SummaryTest)
+SummaryStats<-rbind(DT[Status=='Stressed' & !is.na(AreaXZsu) , 
+                       .(deltaArea =sum(AreaXZsu)), by= .(Phys,Status)],
+                    DT[Status=='Not Stressed' & !is.na(AreaXZus), 
+                       .(deltaArea =sum(AreaXZus)), by= .(Phys,Status)])
+
 class1 <- class1 %>% mutate(AreaXZsu = Acres*SFsu*Zsu)
 class1 <- class1 %>% mutate(AreaXZus = Acres*SFus*Zus)
 
