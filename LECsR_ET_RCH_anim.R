@@ -1,14 +1,16 @@
-library(reshape2)
-library(raster)
-library(dplyr)
-library(rasterVis)
-library(data.table)
-library(sp)
-library(rgdal)
-library(maps)
-library(maptools)
-library(animation)
-library(rgeos)
+#--
+#   package management:
+#     provide automated means for first time use of script to automatically
+#	    install any new packages required for this code, with library calls
+#	    wrapped in a for loop.
+#--
+list.of.pkgs <-  c("reshape2","raster","dplyr","rasterVis","data.table","sp",
+                   "rgdal","maps","maptools","animation","rgeos")
+
+new.pkgs <- list.of.pkgs[!(list.of.pkgs %in% installed.packages()[, "Package"])]
+
+if (length(new.pkgs)){ install.packages(new.pkgs) }
+for (pkg in list.of.pkgs){ library(pkg,character.only = TRUE) }
 
 geomSeries <- function(base, max) {
   (base^(0:floor(log(max, base)))-1)/100
