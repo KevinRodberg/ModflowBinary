@@ -92,5 +92,3 @@ close(to.read)
 DiffVector <- CBCdata1 + CBCdata2
 print(paste("Adding: ", trimws(CBCterms[[n1]]), " + ", trimws(CBCterms[[n2]])))
 nsp = length(SP_rng)
-
-)
