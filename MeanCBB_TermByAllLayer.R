@@ -2,8 +2,6 @@
 #=================================================================
 # R:\ModflowBinary\MeanCBC_TermByLayer.R
 #=================================================================
-# Beginning of mean Modflow CBC
-#
 # Created by Kevin A. Rodberg - October 2019
 #
 # Purpose: Create matrix of mean 1 CBC term and 1 layer for all simulation 
@@ -11,7 +9,7 @@
 #=================================================================
 
 #=================================================================
-# Do package management
+# package management
 #=================================================================
 pkgChecker <- function(x){
   for( i in x ){
@@ -22,16 +20,22 @@ pkgChecker <- function(x){
   }
 }
 list.of.packages <-c( "rModflow","future.apply","tictoc",
-                      "future","listenv","rasterVis","devtools")
+                      "future","listenv","rasterVis","devtools","tcltk","tcltk2")
 suppressWarnings(pkgChecker(list.of.packages))
+
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if (!'githubinstall' %in% installed.packages()[,"Package"]){
   install.packages('githubinstall')
 }
 if ("rModflow" %in% new.packages) devtools::install_github("KevinRodberg/rModflow")
 
-
-# source ("//ad.sfwmd.gov/dfsroot/data/wsd/SUP/devel/source/R/ReusableFunctions/tclFuncs.R")
+options(scipen = 999)
+#=================================================================
+# Set up multiprocessing environment variables
+#=================================================================
+cat('Setting up multiprocessor environment \n')
+plan(multiprocess, .skip = TRUE)
+data <- listenv()
 
 #=================================================================
 # Choose Pre-defined Modflow Model Parameters
@@ -97,17 +101,15 @@ term <- CBCterms[[n1]]
 # cell by cell budget terms for all stress periods by layer
 #=================================================================
 makeMeanLayer<- function(cbbFile,selectLayer,SP_rng,term){
-  to.read <- file(cbbFile, "rb")
-  filPtr<- to.read 
   print (paste("Retrieving", trimws(CBCterms[[n1]])))
   term2Read <-trimws(CBCterms[[n1]])
   maxSP <- as.integer(TtlStrPd)
-  tictoc::tic(paste('Reading CBC for for layer ',selectLayer))
+  tictoc::tic(paste('Read CBC for for layer ',selectLayer))
   #=================================================================
   #  call rModflow function to read from CBC binary file.
   #=================================================================
-  CBCdata1 <- rModflow::readCBCbinByTerm(to.read, term, SP_rng, selectLayer)
-  close(to.read)
+  filPtr <- file(cbbFile, "rb")
+  CBCdata1 <- rModflow::readCBCbinByTerm(filPtr, term, SP_rng, selectLayer)
   tictoc::toc()
   #=================================================================
   # Reformat CBCdata1 as 3D array using col, row, StressPeriod dimensions
@@ -146,13 +148,6 @@ makeMeanLayer<- function(cbbFile,selectLayer,SP_rng,term){
   #=================================================================
   MeanRasL1<-raster::raster(MeanSim,xmin,xmax,ymin,ymax, crs=HARNSP17ft)
   
-  # #=================================================================
-  # # does not print.  Just available for debugging.
-  # #=================================================================
-  # my.at = c(minValue(MeanRasL1),-1,1,maxValue(MeanRasL1))
-  # yourTheme = rasterVis::rasterTheme(region = RColorBrewer::brewer.pal('BrBG', n = 9))
-  # lattice::levelplot(MeanRasL1,par.settings = yourTheme,at=my.at)
-  # Sys.sleep(0)
   #=================================================================
   # Export raster as tiff file 
   #=================================================================  
@@ -160,20 +155,17 @@ makeMeanLayer<- function(cbbFile,selectLayer,SP_rng,term){
   filename = paste0(basePath,'/Mean_',term2Read,'_Lay',selectLayer,'.tif')
   raster::writeRaster(MeanRasL1, filename, format="GTiff", overwrite=TRUE)
 }
-#=================================================================
-# Set up multiprocessing environment variables
-#=================================================================
-plan(multiprocess)
-data <- listenv()
+
 ix=0
 tictoc::tic("Raster Creation")
+
 for (selectLayer in seq(1,M$nlays)){
   #=================================================================
   # Retrieve CBC by Layer using multiple processors
   #=================================================================
   cat(paste("Start making rasters for",term,"Layer",selectLayer, '\n'))
-      ix = ix + 1
-      data[[ix]] %<-%  makeMeanLayer(cbbFile,selectLayer,SP_rng,term)
+  ix = ix + 1
+  data[[ix]] %<-%  makeMeanLayer(cbbFile,selectLayer,SP_rng,term)
 }
 cat(paste("Rasters will be created in ",dirname(cbbFile)),"in a couple minutes \n")
 lastOne <- future::futureOf(data[[ix]])

@@ -4,6 +4,7 @@ library(rModflow)
 
 setwd('R:/ModflowBinary/sharable')
 source ("./tclFuncs.R")
+source('R:/rModflow/R/modflowDataFuncs.R')
 
 #=================================================================
 # Beginning of Script
